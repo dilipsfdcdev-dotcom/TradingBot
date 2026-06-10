@@ -1,0 +1,10 @@
+services:
+  tradingbot:
+    build: .
+    restart: unless-stopped        # auto-restart keeps the fleet running 24/7
+    env_file: .env
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./logs:/app/logs
+      - ./config.yaml:/app/config.yaml:ro

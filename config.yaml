@@ -1,0 +1,68 @@
+# ==========================================================================
+# Autonomous Scalping Fleet - configuration
+# All risk values are fractions of equity (0.01 = 1%)
+# ==========================================================================
+
+risk:
+  risk_per_trade: 0.005        # 0.5% of equity risked per trade
+  max_daily_loss: 0.04         # stop trading for the day at -4% equity
+  max_drawdown: 0.15           # hard kill-switch at -15% from peak equity
+  max_open_positions: 4        # across all agents
+  max_positions_per_symbol: 1
+  max_lots: 2.0                # absolute cap per order regardless of equity
+  min_free_margin_pct: 0.30    # skip new trades if free margin < 30% of equity
+
+news:
+  enabled: true                # pause trading around high-impact news
+  block_minutes_before: 15
+  block_minutes_after: 15
+  impacts: ["High"]            # which calendar impacts trigger the pause
+
+trading:
+  magic: 777001                # order tag so the bot only manages its own trades
+  loop_seconds: 5              # agent decision loop interval
+  trail_seconds: 2             # trailing-stop check interval
+  cooldown_minutes: 5          # wait after a position closes before re-entering
+  max_trade_age_minutes: 240   # time-based exit for stale scalps
+
+# One autonomous agent is spawned per symbol below.
+agents:
+  - symbol: XAUUSD
+    timeframe: 5m              # entry timeframe
+    trend_timeframe: 15m       # higher-timeframe trend filter
+    max_spread_points: 45      # skip entries when spread is wider than this
+    atr_sl_mult: 1.5           # stop-loss distance  = mult * ATR(14)
+    atr_tp_mult: 2.2           # take-profit distance = mult * ATR(14)
+    trail_activate_atr: 1.0    # start trailing after +1.0 ATR of profit
+    trail_distance_atr: 0.8    # trail the stop this far behind price
+    breakeven_atr: 0.6         # move SL to breakeven after +0.6 ATR
+
+  - symbol: EURUSD
+    timeframe: 5m
+    trend_timeframe: 15m
+    max_spread_points: 15
+    atr_sl_mult: 1.5
+    atr_tp_mult: 2.2
+    trail_activate_atr: 1.0
+    trail_distance_atr: 0.8
+    breakeven_atr: 0.6
+
+  - symbol: GBPUSD
+    timeframe: 5m
+    trend_timeframe: 15m
+    max_spread_points: 18
+    atr_sl_mult: 1.5
+    atr_tp_mult: 2.2
+    trail_activate_atr: 1.0
+    trail_distance_atr: 0.8
+    breakeven_atr: 0.6
+
+  - symbol: USDJPY
+    timeframe: 5m
+    trend_timeframe: 15m
+    max_spread_points: 15
+    atr_sl_mult: 1.5
+    atr_tp_mult: 2.2
+    trail_activate_atr: 1.0
+    trail_distance_atr: 0.8
+    breakeven_atr: 0.6

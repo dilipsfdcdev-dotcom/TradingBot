@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Scalping Fleet Dashboard</title>
+<style>
+  :root {
+    --bg: #0d1117; --panel: #161b22; --border: #30363d;
+    --text: #e6edf3; --muted: #8b949e;
+    --green: #3fb950; --red: #f85149; --amber: #d29922; --blue: #58a6ff;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: var(--bg); color: var(--text); font: 14px/1.5 -apple-system, "Segoe UI", Roboto, sans-serif; padding: 16px; }
+  h1 { font-size: 18px; display: flex; align-items: center; gap: 10px; margin-bottom: 16px; }
+  .dot { width: 10px; height: 10px; border-radius: 50%; display: inline-block; }
+  .grid { display: grid; gap: 12px; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); }
+  .panel { background: var(--panel); border: 1px solid var(--border); border-radius: 8px; padding: 14px; }
+  .panel h2 { font-size: 13px; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); margin-bottom: 10px; }
+  .kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(110px, 1fr)); gap: 8px; }
+  .kpi { background: var(--bg); border: 1px solid var(--border); border-radius: 6px; padding: 8px 10px; }
+  .kpi .label { color: var(--muted); font-size: 11px; }
+  .kpi .value { font-size: 17px; font-weight: 600; }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  th { text-align: left; color: var(--muted); font-weight: 500; padding: 4px 8px; border-bottom: 1px solid var(--border); }
+  td { padding: 5px 8px; border-bottom: 1px solid #21262d; }
+  .pos { color: var(--green); } .neg { color: var(--red); }
+  .badge { padding: 1px 8px; border-radius: 10px; font-size: 11px; border: 1px solid var(--border); }
+  .b-buy { color: var(--green); border-color: var(--green); }
+  .b-sell { color: var(--red); border-color: var(--red); }
+  .b-scan { color: var(--blue); border-color: var(--blue); }
+  .b-trade { color: var(--green); border-color: var(--green); }
+  .b-pause { color: var(--amber); border-color: var(--amber); }
+  .b-err { color: var(--red); border-color: var(--red); }
+  .imp-High { color: var(--red); } .imp-Medium { color: var(--amber); } .imp-Low { color: var(--muted); }
+  #equity-chart { width: 100%; height: 140px; }
+  .muted { color: var(--muted); }
+  .wide { grid-column: 1 / -1; }
+  button.stop { background: #21130f; color: var(--red); border: 1px solid var(--red); border-radius: 6px; padding: 6px 14px; cursor: pointer; font-weight: 600; margin-left: auto; }
+  button.stop:hover { background: var(--red); color: #fff; }
+  .scroll { max-height: 260px; overflow-y: auto; }
+</style>
+</head>
+<body>
+<h1>
+  <span class="dot" id="conn-dot" style="background:var(--muted)"></span>
+  Autonomous Scalping Fleet
+  <span class="muted" id="uptime" style="font-size:12px;font-weight:400"></span>
+  <button class="stop" onclick="emergencyStop()">⛔ EMERGENCY STOP</button>
+</h1>
+
+<div class="grid">
+  <div class="panel wide">
+    <h2>Account</h2>
+    <div class="kpis" id="account-kpis"></div>
+  </div>
+
+  <div class="panel wide">
+    <h2>Equity (last 60 min)</h2>
+    <canvas id="equity-chart"></canvas>
+  </div>
+
+  <div class="panel wide">
+    <h2>Open Positions</h2>
+    <table>
+      <thead><tr><th>Symbol</th><th>Side</th><th>Lots</th><th>Entry</th><th>Now</th><th>SL</th><th>TP</th><th>P/L</th><th>Opened</th></tr></thead>
+      <tbody id="positions-body"></tbody>
+    </table>
+  </div>
+
+  <div class="panel">
+    <h2>Agents</h2>
+    <table>
+      <thead><tr><th>Symbol</th><th>Status</th><th>Trend</th><th>Spread</th><th>ATR</th><th>Detail</th></tr></thead>
+      <tbody id="agents-body"></tbody>
+    </table>
+  </div>
+
+  <div class="panel">
+    <h2>Economic Calendar (48h)</h2>
+    <div class="scroll">
+      <table>
+        <thead><tr><th>Time (UTC)</th><th>Cur</th><th>Impact</th><th>Event</th><th>Fcst</th></tr></thead>
+        <tbody id="news-body"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="panel wide">
+    <h2>Trade Journal</h2>
+    <div class="scroll">
+      <table>
+        <thead><tr><th>Time</th><th>Event</th><th>Symbol</th><th>Details</th></tr></thead>
+        <tbody id="journal-body"></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<script>
+const fmt = (v, d=2) => v == null ? '—' : Number(v).toFixed(d);
+const pl = v => `<span class="${v >= 0 ? 'pos' : 'neg'}">${fmt(v)}</span>`;
+
+async function refreshState() {
+  try {
+    const s = await (await fetch('/api/state')).json();
+    const dot = document.getElementById('conn-dot');
+    dot.style.background = s.connected ? 'var(--green)' : 'var(--red)';
+    const h = Math.floor(s.uptime_seconds/3600), m = Math.floor(s.uptime_seconds%3600/60);
+    let status = s.market_open ? '' : ' · market closed';
+    if (s.risk && !s.risk.trading_allowed) status += ` · ⛔ ${s.risk.halt_reason}`;
+    document.getElementById('uptime').textContent = `up ${h}h ${m}m${status}`;
+
+    const a = s.account || {};
+    document.getElementById('account-kpis').innerHTML = [
+      ['Balance', fmt(a.balance) + ' ' + (a.currency||'')],
+      ['Equity', fmt(a.equity) + ' ' + (a.currency||'')],
+      ['Floating P/L', pl((a.equity||0) - (a.balance||0))],
+      ['Free Margin', fmt(a.freeMargin)],
+      ['Leverage', a.leverage ? '1:' + a.leverage : '—'],
+      ['Day Start', fmt(s.risk?.day_start_equity)],
+      ['Peak Equity', fmt(s.risk?.peak_equity)],
+      ['Open Trades', (s.positions||[]).length],
+    ].map(([l,v]) => `<div class="kpi"><div class="label">${l}</div><div class="value">${v}</div></div>`).join('');
+
+    document.getElementById('positions-body').innerHTML = (s.positions||[]).map(p => `
+      <tr><td>${p.symbol}</td>
+      <td><span class="badge b-${p.type.toLowerCase()}">${p.type}</span></td>
+      <td>${p.volume}</td><td>${p.openPrice}</td><td>${p.currentPrice ?? '—'}</td>
+      <td>${p.stopLoss ?? '—'}</td><td>${p.takeProfit ?? '—'}</td>
+      <td>${pl(p.profit)}</td><td class="muted">${(p.time||'').replace('T',' ').slice(0,19)}</td></tr>
+    `).join('') || '<tr><td colspan="9" class="muted">No open positions</td></tr>';
+
+    const badge = st => ({scanning:'b-scan', in_trade:'b-trade', paused:'b-pause', error:'b-err'}[st] || '');
+    document.getElementById('agents-body').innerHTML = Object.values(s.agents||{}).map(ag => `
+      <tr><td>${ag.symbol}</td>
+      <td><span class="badge ${badge(ag.status)}">${ag.status}</span></td>
+      <td>${ag.trend}</td><td>${ag.spread_points}</td><td>${ag.atr}</td>
+      <td class="muted">${ag.detail||''}</td></tr>
+    `).join('');
+
+    drawEquity(s.equity_curve || []);
+  } catch (e) { document.getElementById('conn-dot').style.background = 'var(--red)'; }
+}
+
+function drawEquity(curve) {
+  const c = document.getElementById('equity-chart');
+  const ctx = c.getContext('2d');
+  c.width = c.clientWidth; c.height = 140;
+  ctx.clearRect(0,0,c.width,c.height);
+  if (curve.length < 2) return;
+  const vals = curve.map(p => p[1]);
+  const min = Math.min(...vals), max = Math.max(...vals), range = (max-min) || 1;
+  ctx.beginPath();
+  curve.forEach((p,i) => {
+    const x = i/(curve.length-1) * (c.width-10) + 5;
+    const y = c.height - 12 - ((p[1]-min)/range) * (c.height-24);
+    i ? ctx.lineTo(x,y) : ctx.moveTo(x,y);
+  });
+  ctx.strokeStyle = vals[vals.length-1] >= vals[0] ? '#3fb950' : '#f85149';
+  ctx.lineWidth = 1.5; ctx.stroke();
+  ctx.fillStyle = '#8b949e'; ctx.font = '11px sans-serif';
+  ctx.fillText(fmt(max), 5, 12); ctx.fillText(fmt(min), 5, c.height-3);
+}
+
+async function refreshNews() {
+  try {
+    const d = await (await fetch('/api/news')).json();
+    document.getElementById('news-body').innerHTML = (d.events||[]).map(e => `
+      <tr><td class="muted">${e.time.replace('T',' ').slice(5,16)}</td>
+      <td>${e.country}</td><td class="imp-${e.impact}">${e.impact}</td>
+      <td>${e.title}</td><td class="muted">${e.forecast||''}</td></tr>
+    `).join('') || '<tr><td colspan="5" class="muted">No events</td></tr>';
+  } catch (e) {}
+}
+
+async function refreshJournal() {
+  try {
+    const d = await (await fetch('/api/journal')).json();
+    document.getElementById('journal-body').innerHTML = (d.entries||[]).map(e => {
+      const extra = Object.entries(e).filter(([k]) => !['time','event','symbol'].includes(k))
+        .map(([k,v]) => `${k}=${v}`).join(' ');
+      return `<tr><td class="muted">${(e.time||'').replace('T',' ').slice(0,19)}</td>
+      <td>${e.event}</td><td>${e.symbol||''}</td><td class="muted">${extra}</td></tr>`;
+    }).join('') || '<tr><td colspan="4" class="muted">No journal entries yet</td></tr>';
+  } catch (e) {}
+}
+
+async function emergencyStop() {
+  if (!confirm('Halt all trading and close every bot position?')) return;
+  await fetch('/api/emergency-stop', {method:'POST'});
+  refreshState(); refreshJournal();
+}
+
+refreshState(); refreshNews(); refreshJournal();
+setInterval(refreshState, 3000);
+setInterval(refreshNews, 300000);
+setInterval(refreshJournal, 15000);
+</script>
+</body>
+</html>

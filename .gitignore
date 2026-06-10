@@ -1,49 +1,14 @@
-# Python
+# Secrets - never commit
+.env
+
+# Runtime artifacts
+logs/
 __pycache__/
-*.py[cod]
-*$py.class
-*.so
-.Python
-*.egg-info/
-dist/
-build/
-
-# Virtual Environment
-bin/
-lib/
-lib64/
-include/
-share/
-pyvenv.cfg
-
-# Data files (exclude large datasets)
-*.csv
-data/*.json
-!data/.gitkeep
-
-# Model checkpoints - keep structure but exclude large files
-*.zip
-*.tar.gz
-train/ppo_*.zip
-train/dreamer*/
-train/dreamer_ultimate/
-
-# Logs
-*.log
-training.log
+*.pyc
+.venv/
+venv/
 
 # IDE
-.vscode/
 .idea/
-*.swp
-*.swo
-*~
-
-# OS
+.vscode/
 .DS_Store
-Thumbs.db
-
-# Secrets
-.env
-*.key
-credentials.json

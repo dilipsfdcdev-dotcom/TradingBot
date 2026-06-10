@@ -1,28 +1,15 @@
-# Deep Reinforcement Learning
-stable-baselines3>=2.0.0
-torch>=2.0.0
-gymnasium>=0.29.0
+# Broker connectivity (MT5 via MetaApi cloud bridge - works on any OS, 24/7)
+metaapi-cloud-sdk>=27.0.0
 
-# Data Processing
+# Data
 pandas>=2.0.0
 numpy>=1.24.0
 
-# Trading Platform Integration
-MetaTrader5>=5.0.0
+# Dashboard
+fastapi>=0.110.0
+uvicorn[standard]>=0.29.0
 
 # Utilities
-tqdm>=4.65.0
-shimmy>=2.0.0
 python-dotenv>=1.0.0
-
-# Optional: For data fetching
-yfinance>=0.2.0
-requests>=2.31.0
-
-# Optional: For visualization
-matplotlib>=3.7.0
-seaborn>=0.12.0
-
-# Optional: For advanced features
-scikit-learn>=1.3.0
-scipy>=1.11.0
+PyYAML>=6.0
+aiohttp>=3.9.0

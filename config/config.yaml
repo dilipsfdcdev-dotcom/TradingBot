@@ -54,6 +54,12 @@ exits:
   trail_atr_mult: 2.0         # trail SL this many ATRs behind the high/low
   partial_close_at_r: 1.5     # take partial profit at +1.5R
   partial_close_pct: 0.5      # close 50% of the position, let the rest run
+  # --- stop-and-reverse ---
+  close_on_opposite_signal: true   # if holding a BUY and a valid SELL signal
+                                   # fires (or vice-versa), close the position
+                                   # immediately instead of waiting for the SL.
+                                   # It will re-enter the new direction next
+                                   # cycle if the signal still qualifies.
 
 # ── Strategy parameters (confluence scalping system) ─────────────────────
 strategy:

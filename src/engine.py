@@ -153,24 +153,55 @@ class TradingEngine:
         if not market_open(sym_cfg.get("session", "24/7"), now):
             return "market_closed", ""
 
-        # one position per symbol (configurable)
         held = [p for p in positions if p["symbol"] == symbol]
-        if len(held) >= self.cfg["risk"]["max_trades_per_symbol"]:
-            pnl = sum(p["profit"] for p in held)
-            return "holding", f"{len(held)} pos, pnl={pnl:.2f}"
 
-        # spread guard
+        # signals are computed every cycle (needed for stop-and-reverse, not
+        # just for new entries)
+        chosen, (state, detail) = self._pick_signal(symbol)
+
+        # ── already in a trade ──
+        if held:
+            held_dir = held[0]["type"]
+            reverse_on = self.cfg["exits"].get("close_on_opposite_signal", True)
+            if chosen is not None and reverse_on and chosen.direction != held_dir:
+                # opposite signal => close the existing position(s) now
+                closed = 0
+                for p in held:
+                    if p["type"] != chosen.direction and self.broker.close_position(
+                            p, self.cfg["engine"]["slippage_points"],
+                            f"reverse->{chosen.direction}"):
+                        self.store.record_event(
+                            "CLOSE", symbol, p["type"], p["volume"],
+                            p["price_current"], profit=p["profit"], ticket=p["ticket"],
+                            detail=f"opposite {chosen.direction} signal (score {chosen.score})")
+                        closed += 1
+                return "reversed", f"closed {held_dir} on {chosen.direction} signal"
+            if len(held) >= self.cfg["risk"]["max_trades_per_symbol"]:
+                pnl = sum(p["profit"] for p in held)
+                return "holding", f"{len(held)} pos, pnl={pnl:.2f}"
+
+        # ── flat: apply entry gates, then open if there is a signal ──
         spread = self.broker.spread_points(symbol)
         if spread > sym_cfg.get("max_spread", 1e9):
             return "spread_wide", f"{spread:.0f}>{sym_cfg['max_spread']}"
 
-        # news guard
         blocked, why = self.news.is_blocked(symbol, now)
         if blocked:
             self.store.set_status(f"news_block_{symbol}", why)
             return "news_blocked", why
 
-        # multi-timeframe signals
+        if chosen is None:
+            return state, detail
+
+        self._open_trade(sym_cfg, chosen, acc)
+        return "TRADE", f"{chosen.direction} score={chosen.score}"
+
+    def _pick_signal(self, symbol):
+        """Evaluate all entry timeframes and return (chosen Signal | None, status).
+
+        Stores the per-timeframe snapshot for the dashboard. A signal is only
+        'chosen' when >= `need` entry timeframes agree on direction.
+        """
         params = self.cfg["strategy"]
         trend_df = self.broker.get_rates(
             symbol, self.cfg["timeframes"]["trend"],
@@ -195,29 +226,24 @@ class TradingEngine:
         self.store.set_status(f"signals_{symbol}", latest_snapshot)
 
         if all(v["direction"] == "NODATA" for v in latest_snapshot.values()):
-            return "no_data", "broker returned no bars"
+            return None, ("no_data", "broker returned no bars")
 
         if not actionable:
-            # report the best score seen so the user knows how close it is
             best = max((v["score"] for v in latest_snapshot.values()
                         if v["direction"] != "NODATA"), default=0)
-            return "no_signal", f"best score {best}/6, need {params['min_confluence_score']}"
+            return None, ("no_signal",
+                          f"best score {best}/6, need {params['min_confluence_score']}")
 
-        # require multi-timeframe agreement
         buys = [s for tf, s in actionable if s.direction == "BUY"]
         sells = [s for tf, s in actionable if s.direction == "SELL"]
         n_entry = len(self.cfg["timeframes"]["entry"])
         need = 2 if n_entry >= 2 else 1
 
         if len(buys) >= need and len(buys) >= len(sells):
-            chosen = max(buys, key=lambda s: s.score)
-        elif len(sells) >= need and len(sells) > len(buys):
-            chosen = max(sells, key=lambda s: s.score)
-        else:
-            return "no_agreement", f"buys={len(buys)} sells={len(sells)} need={need}"
-
-        self._open_trade(sym_cfg, chosen, acc)
-        return "TRADE", f"{chosen.direction} score={chosen.score}"
+            return max(buys, key=lambda s: s.score), ("ok", "")
+        if len(sells) >= need and len(sells) > len(buys):
+            return max(sells, key=lambda s: s.score), ("ok", "")
+        return None, ("no_agreement", f"buys={len(buys)} sells={len(sells)} need={need}")
 
     def _open_trade(self, sym_cfg, sig, acc):
         symbol = sym_cfg["name"]

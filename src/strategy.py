@@ -120,14 +120,15 @@ def evaluate(f: dict, htf: int, params: dict) -> Signal:
         ("htf_trend", htf if htf != 0 else (1 if price > f["ema_slow"] else -1)),
     ]
     net = sum(v for _, v in votes)
+    vote_reasons = [f"{name}:{'+' if v > 0 else ''}{v}" for name, v in votes]
     direction = "BUY" if net > 0 else "SELL" if net < 0 else "NONE"
     if direction == "NONE":
-        sig.reasons.append("no net bias")
+        sig.reasons = vote_reasons + ["no net bias (3 buy / 3 sell tie)"]
         return sig
 
     want = 1 if direction == "BUY" else -1
     sig.score = sum(1 for _, v in votes if v == want)
-    sig.reasons = [f"{name}:{'+' if v > 0 else ''}{v}" for name, v in votes]
+    sig.reasons = vote_reasons
 
     # --- vetoes ---
     if direction == "BUY" and rsi_v >= p["rsi_overbought"]:

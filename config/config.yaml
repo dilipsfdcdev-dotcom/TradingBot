@@ -61,12 +61,12 @@ exits:
   trail_atr_mult: 2.0         # trail SL this many ATRs behind the high/low
   partial_close_at_r: 1.5     # take partial profit at +1.5R
   partial_close_pct: 0.5      # close 50% of the position, let the rest run
-  # --- money profit target (bank-and-re-enter) ---
-  profit_target_money: 10000  # close a trade once its floating profit (in your
-                              # ACCOUNT CURRENCY, e.g. INR) reaches this amount.
-                              # The bot then re-opens the same cycle if the
-                              # signal still qualifies, so profit is banked and
-                              # not given back. 0 = off (use R-based TP instead).
+  # --- fixed MONEY targets (account currency, e.g. INR; 0 = use ATR instead) ---
+  # When set, the order's TP/SL are placed at the exact price that yields this
+  # profit/loss for the trade's lot size — so every win and every loss is a
+  # known, fixed amount. With TP > SL you win more than you lose per trade.
+  profit_target_money: 15000  # take profit at +15,000
+  stop_loss_money: 10000      # stop loss at -10,000 (capped, fixed)
   # --- stop-and-reverse ---
   close_on_opposite_signal: true   # if holding a BUY and a valid SELL signal
                                    # fires (or vice-versa), close the position

@@ -29,7 +29,8 @@ symbols:
 timeframes:
   entry: ["M1"]
   # entry: ["M1", "M3", "M5"]   # scalping timeframes you asked for
-  trend: "M15"                # higher TF that defines directional bias
+  trend: "M5"                 # higher TF that defines directional bias
+                              # (M5 is the better-matched filter for M1 entries)
 
 # ── Risk management ──────────────────────────────────────────────────────
 # IMPORTANT: these are PERCENTAGES.  2 = 2%, 20 = 20%, 0 = off.

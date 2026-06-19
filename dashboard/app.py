@@ -81,7 +81,7 @@ _SIGNAL_SHORT = {
     "macd": "MACD",
     "macd_momentum": "MACD ▲▼",
     "rsi_mid": "RSI 50",
-    "htf_trend": "M15 trend",
+    "htf_trend": f"{cfg['timeframes']['trend']} trend",
 }
 
 

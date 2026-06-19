@@ -14,7 +14,6 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 import pandas as pd
-import plotly.graph_objects as go
 import streamlit as st
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
@@ -185,46 +184,26 @@ for sym in [s["name"] for s in cfg["symbols"] if s["enabled"]]:
 
 st.divider()
 
-# ═══════════════════ POSITIONS + EQUITY ═══════════════════
-left, right = st.columns(2)
-with left:
-    st.subheader("💼 Open Positions")
-    snap = fetch_df("SELECT * FROM positions_snapshot ORDER BY ts DESC LIMIT 1")
-    positions = []
-    if not snap.empty:
-        try:
-            positions = json.loads(snap.iloc[0]["data"])
-        except (json.JSONDecodeError, TypeError):
-            positions = []
-    if positions:
-        pdf = pd.DataFrame(positions)
-        st.dataframe(
-            pdf[["symbol", "type", "volume", "price_open", "price_current",
-                 "sl", "tp", "profit"]],
-            use_container_width=True, hide_index=True,
-            column_config={"profit": st.column_config.NumberColumn("profit", format="%.2f")},
-        )
-        st.metric("Total open P/L", f"{sum(p.get('profit', 0) for p in positions):,.2f}")
-    else:
-        st.success("Flat — no open positions.")
-
-with right:
-    st.subheader("📈 Equity Curve")
-    if not eqdf.empty:
-        fig = go.Figure()
-        fig.add_trace(go.Scatter(x=eqdf["ts"], y=eqdf["equity"], name="Equity",
-                                 line=dict(color="#16c784", width=2)))
-        fig.add_trace(go.Scatter(x=eqdf["ts"], y=eqdf["balance"], name="Balance",
-                                 line=dict(color="#999", width=1, dash="dot")))
-        lo = eqdf[["equity", "balance"]].min().min()
-        hi = eqdf[["equity", "balance"]].max().max()
-        pad = (hi - lo) * 0.1 or hi * 0.001
-        fig.update_layout(height=300, margin=dict(l=0, r=0, t=10, b=0),
-                          legend=dict(orientation="h", y=1.1),
-                          yaxis=dict(range=[lo - pad, hi + pad]))
-        st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False})
-    else:
-        st.info("Waiting for the bot to write equity data…")
+# ═══════════════════ OPEN POSITIONS ═══════════════════
+st.subheader("💼 Open Positions")
+snap = fetch_df("SELECT * FROM positions_snapshot ORDER BY ts DESC LIMIT 1")
+positions = []
+if not snap.empty:
+    try:
+        positions = json.loads(snap.iloc[0]["data"])
+    except (json.JSONDecodeError, TypeError):
+        positions = []
+if positions:
+    pdf = pd.DataFrame(positions)
+    st.dataframe(
+        pdf[["symbol", "type", "volume", "price_open", "price_current",
+             "sl", "tp", "profit"]],
+        use_container_width=True, hide_index=True,
+        column_config={"profit": st.column_config.NumberColumn("profit", format="%.2f")},
+    )
+    st.metric("Total open P/L", f"{sum(p.get('profit', 0) for p in positions):,.2f}")
+else:
+    st.success("Flat — no open positions.")
 
 st.divider()
 

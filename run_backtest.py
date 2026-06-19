@@ -47,9 +47,17 @@ def _print_report(symbol, tf, report):
 def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--days", nargs="+", type=int, default=[30, 20, 10])
+    ap.add_argument("--risk", type=float,
+                    help="override risk per trade, e.g. 0.005 for 0.5%% (default: config)")
+    ap.add_argument("--no-costs", action="store_true",
+                    help="ignore spread/costs (optimistic; not recommended)")
     ap.add_argument("--csv", help="CSV file instead of MT5")
     ap.add_argument("--symbol", help="symbol label (with --csv)")
     ap.add_argument("--tf", help="timeframe label (with --csv)")
+    ap.add_argument("--spread-points", type=float, default=0.0,
+                    help="spread in points for --csv mode (MT5 auto-detects)")
+    ap.add_argument("--point", type=float, default=0.0,
+                    help="price per point for --csv mode (MT5 auto-detects)")
     args = ap.parse_args()
 
     cfg = load_config()
@@ -57,14 +65,17 @@ def main() -> None:
     log = get_logger("backtest")
     bt = Backtester(cfg)
     store = Store(cfg.db_path)
-    risk = cfg["risk"]["risk_per_trade"]
+    risk = args.risk if args.risk else cfg["risk"]["risk_per_trade"]
     all_results = {}
+    print(f"\nRisk per trade: {risk*100:.2f}%   "
+          f"Costs: {'OFF (optimistic)' if args.no_costs else 'ON (real spread)'}")
 
     if args.csv:
         df = _load_csv(args.csv)
         symbol = args.symbol or "CSV"
         tf = args.tf or cfg["timeframes"]["entry"][0]
-        rep = windows_report(df, bt, symbol, tf, risk, tuple(args.days))
+        spread_price = 0.0 if args.no_costs else args.spread_points * args.point
+        rep = windows_report(df, bt, symbol, tf, risk, tuple(args.days), spread_price)
         _print_report(symbol, tf, rep)
         all_results[f"{symbol}/{tf}"] = rep
     else:
@@ -78,13 +89,23 @@ def main() -> None:
             if not sym["enabled"]:
                 continue
             broker.ensure_symbol(sym["name"])
+            # auto-detect real spread cost from the live broker
+            spread_price = 0.0
+            if not args.no_costs:
+                spec = broker.symbol_spec(sym["name"])
+                spread_pts = broker.spread_points(sym["name"])
+                if spec and spread_pts < 1e8:
+                    spread_price = spread_pts * spec.point
+                    print(f"  {sym['name']}: spread {spread_pts:.0f} pts "
+                          f"= {spread_price:.5f} price/trade")
+            rsk = args.risk if args.risk else sym.get("risk_per_trade", risk)
             for tf in cfg["timeframes"]["entry"]:
                 df = broker.get_history(sym["name"], tf, max_days)
                 if df is None or len(df) < 100:
                     log.warning("No data for %s %s", sym["name"], tf)
                     continue
-                rsk = sym.get("risk_per_trade", risk)
-                rep = windows_report(df, bt, sym["name"], tf, rsk, tuple(args.days))
+                rep = windows_report(df, bt, sym["name"], tf, rsk,
+                                     tuple(args.days), spread_price)
                 _print_report(sym["name"], tf, rep)
                 all_results[f"{sym['name']}/{tf}"] = rep
         broker.shutdown()

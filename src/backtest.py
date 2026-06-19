@@ -96,7 +96,10 @@ class Backtester:
         self.exits = cfg["exits"]
 
     def run(self, df: pd.DataFrame, symbol: str, timeframe: str,
-            risk_per_trade: float, start_equity: float = 10_000.0) -> BacktestResult:
+            risk_per_trade: float, start_equity: float = 10_000.0,
+            spread_price: float = 0.0) -> BacktestResult:
+        """`spread_price` = round-trip spread in PRICE units; charged once per
+        trade so results reflect real broker costs (huge for scalping)."""
         df = df.copy()
         bias = _trend_bias_series(df, self.cfg["timeframes"]["trend"], self.p["ema_trend"])
 
@@ -132,13 +135,16 @@ class Backtester:
                 if sig.actionable and sig.atr > 0:
                     entry = float(closes[i])
                     sl, _ = self._levels(entry, sig.atr, sig.direction)
+                    risk = abs(entry - sl)
+                    # pay the spread up front (in R terms), once per trade
+                    cost_r = (spread_price / risk) if risk > 0 else 0.0
+                    equity *= (1 - risk_per_trade * cost_r)
                     pos = {
                         "trade": Trade(time_in=bar_time, direction=sig.direction,
-                                       entry=entry, init_sl=sl,
-                                       risk=abs(entry - sl)),
+                                       entry=entry, init_sl=sl, risk=risk),
                         "sl": sl, "best": entry, "remaining": 1.0,
                         "atr": sig.atr, "be_done": False, "partial_done": False,
-                        "realized": 0.0,
+                        "realized": -cost_r,
                     }
 
             eq_times.append(bar_time)
@@ -230,7 +236,8 @@ class Backtester:
 
 
 def windows_report(df: pd.DataFrame, bt: Backtester, symbol: str, timeframe: str,
-                   risk_per_trade: float, days_list=(10, 20, 30)) -> dict:
+                   risk_per_trade: float, days_list=(10, 20, 30),
+                   spread_price: float = 0.0) -> dict:
     """Run the backtest over the last N days for several N and return stats."""
     out = {}
     end = df.index.max()
@@ -239,7 +246,7 @@ def windows_report(df: pd.DataFrame, bt: Backtester, symbol: str, timeframe: str
         if len(sub) < 50:
             out[days] = {"trades": 0, "note": "not enough data"}
             continue
-        res = bt.run(sub, symbol, timeframe, risk_per_trade)
+        res = bt.run(sub, symbol, timeframe, risk_per_trade, spread_price=spread_price)
         s = res.stats()
         if res.equity_curve is not None and len(res.equity_curve):
             curve = res.equity_curve

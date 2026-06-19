@@ -1,0 +1,95 @@
+# ════════════════════════════════════════════════════════════════════════
+#  AUTONOMOUS TRADING BOT — MASTER CONFIGURATION
+#  Everything that controls the bot's behaviour lives here.
+#  Secrets (login/password) live in .env, NOT here.
+# ════════════════════════════════════════════════════════════════════════
+
+# ── Symbols to trade ─────────────────────────────────────────────────────
+# `name`         : exactly as it appears in YOUR broker's Market Watch.
+#                  Gold is often "XAUUSD", BTC often "BTCUSD" — but brokers
+#                  add suffixes like "XAUUSD.m" or "XAUUSDm". Check and edit!
+# `enabled`      : turn a symbol on/off without deleting its settings.
+# `session`      : "24/7" for crypto, "metals" for gold (closed on weekends).
+# `max_spread`   : skip new trades if the spread (in points) is wider than this
+#                  (protects you from bad fills during illiquid moments).
+symbols:
+  - name: "XAUUSD"
+    enabled: true
+    session: "metals"
+    max_spread: 50          # points; gold spread is usually 15-35
+    risk_per_trade: 0.02    # overrides global risk if set (2%)
+  - name: "BTCUSD"
+    enabled: true
+    session: "24/7"
+    max_spread: 5000        # BTC point spreads are large; tune to your broker
+    risk_per_trade: 0.02
+
+# ── Timeframes ───────────────────────────────────────────────────────────
+# The bot trades the `entry` timeframes and uses `trend` as a higher-TF filter.
+timeframes:
+  entry: ["M1", "M3", "M5"]   # scalping timeframes you asked for
+  trend: "M15"                # higher TF that defines directional bias
+
+# ── Risk management ──────────────────────────────────────────────────────
+risk:
+  risk_per_trade: 0.02        # 2% of balance risked per trade (global default)
+  max_open_trades: 4          # total simultaneous positions across all symbols
+  max_trades_per_symbol: 1    # don't stack positions on the same symbol
+  daily_loss_limit: 0.06      # stop trading for the day after -6% equity
+  daily_profit_target: 0.10   # optional: stop for the day after +10% (0 = off)
+  max_drawdown_stop: 0.20     # KILL SWITCH: halt bot entirely at -20% from peak
+  min_lot: 0.01
+  lot_step: 0.01
+  max_lot: 50.0               # hard cap so a tiny SL can't size a monster lot
+
+# ── Stop-loss / take-profit (ATR-based, adapts to volatility) ────────────
+exits:
+  atr_period: 14
+  sl_atr_mult: 1.5            # initial SL = 1.5 x ATR away from entry
+  tp_atr_mult: 3.0            # initial TP = 3.0 x ATR  (=> 2R reward target)
+  # --- Profit protection (your key requirement) ---
+  breakeven_at_r: 1.0         # once trade is +1R, move SL to entry (lock-in)
+  breakeven_offset_r: 0.1     # park SL slightly in profit, not exactly at entry
+  trail_start_r: 1.5          # start trailing once trade reaches +1.5R
+  trail_atr_mult: 2.0         # trail SL this many ATRs behind the high/low
+  partial_close_at_r: 1.5     # take partial profit at +1.5R
+  partial_close_pct: 0.5      # close 50% of the position, let the rest run
+
+# ── Strategy parameters (confluence scalping system) ─────────────────────
+strategy:
+  ema_fast: 9
+  ema_slow: 21
+  ema_trend: 50               # used on the trend timeframe
+  rsi_period: 14
+  rsi_overbought: 70
+  rsi_oversold: 30
+  adx_period: 14
+  adx_min: 20                 # require trend strength; skip choppy markets
+  macd_fast: 12
+  macd_slow: 26
+  macd_signal: 9
+  bb_period: 20
+  bb_std: 2.0
+  min_confluence_score: 4     # need >= this many aligned signals to enter (max 6)
+  min_atr_pct: 0.0002         # skip dead markets (ATR as fraction of price)
+
+# ── News filter ──────────────────────────────────────────────────────────
+news:
+  enabled: true
+  block_minutes_before: 15    # stop opening trades N min before high-impact news
+  block_minutes_after: 15     # ...and N min after
+  high_impact_only: true
+  refresh_seconds: 600        # how often to refetch the calendar/headlines
+
+# ── Engine / loop ──────────────────────────────────────────────────────
+engine:
+  loop_interval_seconds: 5    # how often the main loop runs a full cycle
+  bars_to_fetch: 300          # history bars pulled per symbol/timeframe
+  magic_number: 990022        # tags all orders so the bot only manages its own
+  comment: "auto-bot"
+  slippage_points: 20
+
+# ── Storage / dashboard ──────────────────────────────────────────────────
+storage:
+  db_path: "trading_bot.db"   # SQLite file the bot writes & dashboard reads
+  log_dir: "logs"

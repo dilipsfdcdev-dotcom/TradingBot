@@ -35,12 +35,16 @@ timeframes:
 # IMPORTANT: these are PERCENTAGES.  2 = 2%, 20 = 20%, 0 = off.
 # (Do NOT write 0.02 — that would mean 0.02%.)
 risk:
-  risk_per_trade: 2        # 2% of balance risked per trade (global default)
+  # --- position sizing: choose ONE method ---
+  sizing_mode: "fixed"        # "fixed" = always trade `fixed_lot` lots
+                              # "risk"  = size from risk_per_trade % of balance
+  fixed_lot: 2.0              # lots per trade when sizing_mode = "fixed"
+  risk_per_trade: 2           # % of balance risked per trade (sizing_mode = "risk")
   max_open_trades: 5          # total simultaneous positions across all symbols
-  max_trades_per_symbol: 5    # don't stack positions on the same symbol
-  daily_loss_limit: 100      # stop trading for the day after -6% equity
-  daily_profit_target: 500   # optional: stop for the day after +10% (0 = off)
-  max_drawdown_stop: 10     # KILL SWITCH: halt bot entirely at -20% from peak
+  max_trades_per_symbol: 5    # max stacked positions on the same symbol
+  daily_loss_limit: 0         # 0 = OFF (no daily loss halt — trades forever)
+  daily_profit_target: 0      # 0 = OFF (no daily profit halt)
+  max_drawdown_stop: 0        # 0 = OFF (kill switch DISABLED — no safety halt)
   min_lot: 0.01
   lot_step: 0.01
   max_lot: 50.0               # hard cap so a tiny SL can't size a monster lot
@@ -48,7 +52,6 @@ risk:
 # ── Stop-loss / take-profit (ATR-based, adapts to volatility) ────────────
 exits:
   atr_period: 14
-  profit_target_money: 10000
   sl_atr_mult: 1.5            # initial SL = 1.5 x ATR away from entry
   tp_atr_mult: 3.0            # initial TP = 3.0 x ATR  (=> 2R reward target)
   # --- Profit protection (your key requirement) ---

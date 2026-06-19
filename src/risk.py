@@ -53,7 +53,20 @@ def position_size(
     spec: SymbolSpec,
     risk_cfg: dict,
 ) -> float:
-    """Compute lot size so worst-case loss ~= balance * risk_per_trade."""
+    """Size a position.
+
+    sizing_mode == "fixed": always trade `fixed_lot` lots (clamped to broker
+    limits). sizing_mode == "risk" (default): size so worst-case loss at the
+    stop ~= balance * risk_per_trade.
+    """
+    def _clamp(lot: float) -> float:
+        lot = max(lot, spec.volume_min, risk_cfg["min_lot"])
+        lot = min(lot, spec.volume_max, risk_cfg["max_lot"])
+        return round(lot, 2)
+
+    if risk_cfg.get("sizing_mode", "risk") == "fixed":
+        return _clamp(float(risk_cfg.get("fixed_lot", spec.volume_min)))
+
     risk_money = balance * risk_per_trade
     sl_distance = abs(entry - sl)
     if sl_distance <= 0 or spec.tick_size <= 0 or spec.tick_value <= 0:
@@ -116,7 +129,7 @@ class RiskGate:
 
         if self.day_start_equity:
             change = (equity - self.day_start_equity) / self.day_start_equity
-            if change <= -self.cfg["daily_loss_limit"]:
+            if self.cfg["daily_loss_limit"] > 0 and change <= -self.cfg["daily_loss_limit"]:
                 return False, f"daily loss limit hit ({change:.1%})"
             if (
                 self.cfg["daily_profit_target"] > 0

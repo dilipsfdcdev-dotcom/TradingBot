@@ -17,7 +17,7 @@ symbols:
     enabled: true
     session: "metals"
     max_spread: 300          # points; gold spread is usually 15-35
-    risk_per_trade: 0.02    # overrides global risk if set (2%)
+    risk_per_trade: 0.1    # overrides global risk if set (2%)
   # - name: "BTCUSD"
   #   enabled: true
   #   session: "24/7"
@@ -27,15 +27,16 @@ symbols:
 # ── Timeframes ───────────────────────────────────────────────────────────
 # The bot trades the `entry` timeframes and uses `trend` as a higher-TF filter.
 timeframes:
-  entry: ["M1", "M3", "M5"]   # scalping timeframes you asked for
+  entry: ["M1"]
+  # entry: ["M1", "M3", "M5"]   # scalping timeframes you asked for
   trend: "M15"                # higher TF that defines directional bias
 
 # ── Risk management ──────────────────────────────────────────────────────
 risk:
-  risk_per_trade: 0.10        # 2% of balance risked per trade (global default)
-  max_open_trades: 10          # total simultaneous positions across all symbols
+  risk_per_trade: 2        # 2% of balance risked per trade (global default)
+  max_open_trades: 5          # total simultaneous positions across all symbols
   max_trades_per_symbol: 5    # don't stack positions on the same symbol
-  daily_loss_limit: 20      # stop trading for the day after -6% equity
+  daily_loss_limit: 100      # stop trading for the day after -6% equity
   daily_profit_target: 500   # optional: stop for the day after +10% (0 = off)
   max_drawdown_stop: 10     # KILL SWITCH: halt bot entirely at -20% from peak
   min_lot: 0.01
@@ -45,6 +46,7 @@ risk:
 # ── Stop-loss / take-profit (ATR-based, adapts to volatility) ────────────
 exits:
   atr_period: 14
+  profit_target_money: 10000
   sl_atr_mult: 1.5            # initial SL = 1.5 x ATR away from entry
   tp_atr_mult: 3.0            # initial TP = 3.0 x ATR  (=> 2R reward target)
   # --- Profit protection (your key requirement) ---

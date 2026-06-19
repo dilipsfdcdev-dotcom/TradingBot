@@ -39,7 +39,7 @@ risk:
   # --- position sizing: choose ONE method ---
   sizing_mode: "fixed"        # "fixed" = always trade `fixed_lot` lots
                               # "risk"  = size from risk_per_trade % of balance
-  fixed_lot: 2.0              # lots per trade when sizing_mode = "fixed"
+  fixed_lot: 5.0              # lots per trade when sizing_mode = "fixed"
   risk_per_trade: 2           # % of balance risked per trade (sizing_mode = "risk")
   max_open_trades: 20          # total simultaneous positions across all symbols
   max_trades_per_symbol: 20    # max stacked positions on the same symbol
@@ -66,7 +66,7 @@ exits:
   # When set, the order's TP/SL are placed at the exact price that yields this
   # profit/loss for the trade's lot size — so every win and every loss is a
   # known, fixed amount. With TP > SL you win more than you lose per trade.
-  profit_target_money: 10000  # take profit at +10,000 (money TP)
+  profit_target_money: 20000  # take profit at +10,000 (money TP)
   stop_loss_money: 0          # 0 = OFF -> use the ATR stop (sl_atr_mult x ATR)
   # --- stop-and-reverse ---
   close_on_opposite_signal: true   # if holding a BUY and a valid SELL signal
@@ -84,7 +84,7 @@ strategy:
   rsi_overbought: 70
   rsi_oversold: 30
   adx_period: 14
-  adx_min: 20                 # require trend strength; skip choppy markets
+  adx_min: 10                 # require trend strength; skip choppy markets
   macd_fast: 12
   macd_slow: 26
   macd_signal: 9

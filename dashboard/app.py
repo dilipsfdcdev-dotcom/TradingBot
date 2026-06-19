@@ -126,7 +126,11 @@ with tabs[2]:
         if not sigs:
             continue
         found = True
-        st.subheader(sym["name"])
+        state = status.get(f"state_{sym['name']}", {})
+        state_label = state.get("state", "?")
+        detail = state.get("detail", "")
+        st.subheader(f"{sym['name']} — `{state_label}`"
+                     + (f"  ·  {detail}" if detail else ""))
         cols = st.columns(len(sigs))
         for col, (tf, info) in zip(cols, sigs.items()):
             d = info.get("direction", "NONE")

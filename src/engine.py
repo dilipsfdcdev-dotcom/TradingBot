@@ -55,6 +55,7 @@ class TradingEngine:
         self.trade_mgr = TradeManager(self.broker, cfg["exits"], cfg["engine"])
         self.running = False
         self.magic = cfg["engine"]["magic_number"]
+        self._cycle_count = 0
 
     # ── lifecycle ─────────────────────────────────────────────────────────
     def start(self) -> None:
@@ -112,41 +113,62 @@ class TradingEngine:
         self.store.set_status("can_trade", {"ok": ok, "reason": reason})
         if not ok:
             log.debug("Not opening trades: %s", reason)
+            self._heartbeat(acc, positions, {s["name"]: ("paused", reason)
+                                             for s in self.cfg["symbols"]
+                                             if s["enabled"]})
             return
 
+        statuses: dict[str, tuple[str, str]] = {}
         for sym_cfg in self.cfg["symbols"]:
             if not sym_cfg["enabled"]:
                 continue
             try:
-                self._evaluate_symbol(sym_cfg, positions, acc, now)
+                statuses[sym_cfg["name"]] = self._evaluate_symbol(
+                    sym_cfg, positions, acc, now)
             except Exception:  # noqa: BLE001
                 log.exception("Error evaluating %s", sym_cfg["name"])
+                statuses[sym_cfg["name"]] = ("error", "see log")
+
+        self._heartbeat(acc, positions, statuses)
+
+    def _heartbeat(self, acc, positions, statuses: dict[str, tuple[str, str]]) -> None:
+        """Persist each symbol's state and log a compact summary periodically."""
+        for sym, (state, detail) in statuses.items():
+            self.store.set_status(f"state_{sym}",
+                                  {"state": state, "detail": detail,
+                                   "ts": datetime.now(timezone.utc).isoformat()})
+        self._cycle_count += 1
+        every = self.cfg["engine"].get("heartbeat_cycles", 12)
+        if self._cycle_count % every == 1:
+            summary = "  ".join(
+                f"{s}={st}" + (f"[{d}]" if d else "")
+                for s, (st, d) in statuses.items())
+            log.info("♥ equity=%.2f open=%d | %s",
+                     acc.get("equity", 0), len(positions), summary or "(idle)")
 
     # ── per-symbol logic ─────────────────────────────────────────────────
-    def _evaluate_symbol(self, sym_cfg, positions, acc, now):
+    def _evaluate_symbol(self, sym_cfg, positions, acc, now) -> tuple[str, str]:
         symbol = sym_cfg["name"]
 
         if not market_open(sym_cfg.get("session", "24/7"), now):
-            return
+            return "market_closed", ""
 
         # one position per symbol (configurable)
         held = [p for p in positions if p["symbol"] == symbol]
         if len(held) >= self.cfg["risk"]["max_trades_per_symbol"]:
-            return
+            pnl = sum(p["profit"] for p in held)
+            return "holding", f"{len(held)} pos, pnl={pnl:.2f}"
 
         # spread guard
         spread = self.broker.spread_points(symbol)
         if spread > sym_cfg.get("max_spread", 1e9):
-            log.debug("%s spread %.0f > max %.0f — skip", symbol, spread,
-                      sym_cfg["max_spread"])
-            return
+            return "spread_wide", f"{spread:.0f}>{sym_cfg['max_spread']}"
 
         # news guard
         blocked, why = self.news.is_blocked(symbol, now)
         if blocked:
-            log.info("%s blocked by news: %s", symbol, why)
             self.store.set_status(f"news_block_{symbol}", why)
-            return
+            return "news_blocked", why
 
         # multi-timeframe signals
         params = self.cfg["strategy"]
@@ -158,6 +180,10 @@ class TradingEngine:
         latest_snapshot = {}
         for tf in self.cfg["timeframes"]["entry"]:
             df = self.broker.get_rates(symbol, tf, self.cfg["engine"]["bars_to_fetch"])
+            if df is None or len(df) < 30:
+                latest_snapshot[tf] = {"direction": "NODATA", "score": 0,
+                                       "reasons": ["no bars from broker"], "snapshot": {}}
+                continue
             sig = strategy.generate_signal(df, trend_df, params)
             latest_snapshot[tf] = {
                 "direction": sig.direction, "score": sig.score,
@@ -168,8 +194,14 @@ class TradingEngine:
 
         self.store.set_status(f"signals_{symbol}", latest_snapshot)
 
+        if all(v["direction"] == "NODATA" for v in latest_snapshot.values()):
+            return "no_data", "broker returned no bars"
+
         if not actionable:
-            return
+            # report the best score seen so the user knows how close it is
+            best = max((v["score"] for v in latest_snapshot.values()
+                        if v["direction"] != "NODATA"), default=0)
+            return "no_signal", f"best score {best}/6, need {params['min_confluence_score']}"
 
         # require multi-timeframe agreement
         buys = [s for tf, s in actionable if s.direction == "BUY"]
@@ -182,11 +214,10 @@ class TradingEngine:
         elif len(sells) >= need and len(sells) > len(buys):
             chosen = max(sells, key=lambda s: s.score)
         else:
-            log.debug("%s: no TF agreement (buys=%d sells=%d need=%d)",
-                      symbol, len(buys), len(sells), need)
-            return
+            return "no_agreement", f"buys={len(buys)} sells={len(sells)} need={need}"
 
         self._open_trade(sym_cfg, chosen, acc)
+        return "TRADE", f"{chosen.direction} score={chosen.score}"
 
     def _open_trade(self, sym_cfg, sig, acc):
         symbol = sym_cfg["name"]

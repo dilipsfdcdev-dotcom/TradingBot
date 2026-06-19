@@ -84,6 +84,9 @@ news:
 # ── Engine / loop ──────────────────────────────────────────────────────
 engine:
   loop_interval_seconds: 5    # how often the main loop runs a full cycle
+  heartbeat_cycles: 12        # log a per-symbol status summary every N cycles
+                              # (12 x 5s = ~once per minute) so you can SEE the
+                              # bot is alive and why each symbol is/isn't trading
   bars_to_fetch: 300          # history bars pulled per symbol/timeframe
   magic_number: 990022        # tags all orders so the bot only manages its own
   comment: "auto-bot"

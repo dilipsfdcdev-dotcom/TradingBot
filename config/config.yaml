@@ -66,8 +66,8 @@ exits:
   # When set, the order's TP/SL are placed at the exact price that yields this
   # profit/loss for the trade's lot size — so every win and every loss is a
   # known, fixed amount. With TP > SL you win more than you lose per trade.
-  profit_target_money: 15000  # take profit at +15,000
-  stop_loss_money: 30000      # stop loss at -10,000 (capped, fixed)
+  profit_target_money: 10000  # take profit at +10,000 (money TP)
+  stop_loss_money: 0          # 0 = OFF -> use the ATR stop (sl_atr_mult x ATR)
   # --- stop-and-reverse ---
   close_on_opposite_signal: true   # if holding a BUY and a valid SELL signal
                                    # fires (or vice-versa), close the position

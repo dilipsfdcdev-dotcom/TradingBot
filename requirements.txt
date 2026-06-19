@@ -1,5 +1,5 @@
 # ── Core ───────────────────────────────────────────────────────────────
-MetaTrader5==5.0.45          # MT5 Python bridge (WINDOWS ONLY)
+MetaTrader5>=5.0.45          # MT5 Python bridge (WINDOWS ONLY); use latest 5.0.5xxx
 pandas>=2.0.0
 numpy>=1.24.0
 PyYAML>=6.0

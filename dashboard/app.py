@@ -74,29 +74,28 @@ _STATE = {
     "reversed": "🔄 Reversed",
 }
 
-# the 6 confluence signals -> human labels (keys match strategy.evaluate votes)
-_SIGNAL_LABELS = {
-    "ema_cross": "EMA 9/21 cross",
-    "price_vs_emaslow": "Price vs EMA 21",
-    "macd": "MACD histogram",
-    "macd_momentum": "MACD momentum",
-    "rsi_mid": "RSI vs 50",
-    "htf_trend": "M15 trend (HTF)",
+# the 6 confluence signals -> short labels for the compact grid
+_SIGNAL_SHORT = {
+    "ema_cross": "EMA ✕",
+    "price_vs_emaslow": "Px / EMA",
+    "macd": "MACD",
+    "macd_momentum": "MACD ▲▼",
+    "rsi_mid": "RSI 50",
+    "htf_trend": "M15 trend",
 }
 
 
 def parse_votes(reasons):
     """Split a signal's reasons into (votes, notes).
 
-    votes = [(label, +1/-1)] for the 6 confluence checks; notes = gate/veto
+    votes = [(name, +1/-1)] for the 6 confluence checks; notes = gate/veto
     messages (ADX too low, RSI overbought veto, etc.).
     """
     votes, notes = [], []
     for r in reasons or []:
         name, sep, val = r.rpartition(":")
         if sep and val.strip() in ("+1", "-1"):
-            label = _SIGNAL_LABELS.get(name, name)
-            votes.append((label, 1 if val.strip() == "+1" else -1))
+            votes.append((name, 1 if val.strip() == "+1" else -1))
         else:
             notes.append(r)
     return votes, notes
@@ -143,44 +142,50 @@ k[4].metric("Free Margin", f"{acc.get('free_margin', 0):,.0f}")
 st.divider()
 
 # ═══════════════════ LIVE SIGNALS (hero) ═══════════════════
-st.subheader(f"🔎 Live Signals  ·  need ≥ {need}/6 and 2 timeframes to agree")
+_n_entry = len(cfg["timeframes"]["entry"])
+_agree = f"  ·  {min(2, _n_entry)} timeframes must agree" if _n_entry >= 2 else ""
+st.subheader(f"🔎 Live Signals  ·  need ≥ {need}/6{_agree}")
+
 for sym in [s["name"] for s in cfg["symbols"] if s["enabled"]]:
     sstate = status.get(f"state_{sym}", {})
     sigs = status.get(f"signals_{sym}", {})
     label = _STATE.get(sstate.get("state", ""), sstate.get("state", "?"))
     detail = sstate.get("detail", "")
+
     with st.container(border=True):
-        cols = st.columns([1.3] + [1] * max(len(sigs), 1))
-        cols[0].markdown(f"### {sym}")
-        cols[0].markdown(f"**{label}**")
+        head = st.columns([2, 4])
+        head[0].markdown(f"### {sym}")
+        head[1].markdown(f"### {label}")
         if detail:
-            cols[0].caption(detail)
+            head[1].caption(detail)
+
         if not sigs:
-            cols[1].info("waiting for first scan…")
-        for col, (tf, info) in zip(cols[1:], sigs.items()):
+            st.info("waiting for first scan…")
+
+        for tf, info in sigs.items():
             score = info.get("score", 0)
             d = info.get("direction", "NONE")
-            col.metric(f"{tf}  ·  {_DIR.get(d, d)}", f"{score} / 6",
-                       delta=f"{score - need:+d} vs entry",
-                       delta_color="normal" if score >= need else "off")
             snap = info.get("snapshot", {})
-            if snap:
-                col.caption(f"RSI {snap.get('rsi', '–')} · ADX {snap.get('adx', '–')} "
-                            f"· trend {snap.get('htf_bias', '–')}")
-
-            # the 6 confluence signals with each one's BUY/SELL vote
             votes, notes = parse_votes(info.get("reasons", []))
+            n_buy = sum(1 for _, v in votes if v > 0)
+            n_sell = len(votes) - n_buy
+
+            ok = "✅" if score >= need else "⏳"
+            st.markdown(
+                f"**{tf}** &nbsp; {_DIR.get(d, d)} &nbsp; {ok} **{score}/6** "
+                f"&nbsp;·&nbsp; 🟢 {n_buy} buy / 🔴 {n_sell} sell &nbsp;·&nbsp; "
+                f"RSI {snap.get('rsi', '–')} · ADX {snap.get('adx', '–')} · "
+                f"trend {snap.get('htf_bias', '–')}")
+
             if votes:
-                n_buy = sum(1 for _, v in votes if v > 0)
-                n_sell = len(votes) - n_buy
-                col.caption(f"🟢 {n_buy} buy  ·  🔴 {n_sell} sell")
-                for lbl, v in votes:
-                    if v > 0:
-                        col.markdown(f":green[🟢 {lbl} → BUY]")
-                    else:
-                        col.markdown(f":red[🔴 {lbl} → SELL]")
+                grid = st.columns(len(votes))
+                for cell, (name, v) in zip(grid, votes):
+                    color = "green" if v > 0 else "red"
+                    arrow = "🟢" if v > 0 else "🔴"
+                    cell.markdown(f"{arrow} **{_SIGNAL_SHORT.get(name, name)}**")
+                    cell.markdown(f":{color}[{'BUY' if v > 0 else 'SELL'}]")
             for note in notes:
-                col.caption(f"⚠️ {note}")
+                st.caption(f"⚠️ {note}")
 
 st.divider()
 

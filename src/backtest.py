@@ -99,7 +99,11 @@ class Backtester:
             risk_per_trade: float, start_equity: float = 10_000.0) -> BacktestResult:
         df = df.copy()
         bias = _trend_bias_series(df, self.cfg["timeframes"]["trend"], self.p["ema_trend"])
-        atr = ind.atr(df, self.exits["atr_period"])
+
+        # compute ALL indicators once (vectorised) instead of per-bar — O(n) not O(n^2)
+        feat = strategy.compute_features(df, self.p)
+        cols = {c: feat[c].values for c in feat.columns}
+        bias_arr = bias.values
 
         warmup = max(self.p["ema_slow"], self.p["adx_period"], self.exits["atr_period"]) + 5
         result = BacktestResult(symbol=symbol, timeframe=timeframe)
@@ -108,10 +112,11 @@ class Backtester:
         eq_times, eq_vals = [], []
         pos = None  # active simulated trade state
 
-        highs, lows = df["high"].values, df["low"].values
+        index = df.index
+        highs, lows, closes = df["high"].values, df["low"].values, df["close"].values
 
         for i in range(warmup, len(df)):
-            bar_time = df.index[i]
+            bar_time = index[i]
             hi, lo = highs[i], lows[i]
 
             # ── manage open position against this bar ──
@@ -122,11 +127,10 @@ class Backtester:
 
             # ── look for a new entry when flat ──
             if pos is None:
-                window = df.iloc[: i + 1]
-                sig = strategy.generate_signal(
-                    window, None, self.p, htf_bias=int(bias.iloc[i]))
+                row = {c: cols[c][i] for c in cols}
+                sig = strategy.evaluate(row, int(bias_arr[i]), self.p)
                 if sig.actionable and sig.atr > 0:
-                    entry = float(df["close"].iloc[i])
+                    entry = float(closes[i])
                     sl, _ = self._levels(entry, sig.atr, sig.direction)
                     pos = {
                         "trade": Trade(time_in=bar_time, direction=sig.direction,

@@ -221,6 +221,31 @@ class Broker:
             log.info("PARTIAL closed %.2f lots of %s", volume, symbol)
         return ok
 
+    def close_position(self, pos: dict, slippage: int, reason: str = "close") -> bool:
+        """Fully close a position (used for stop-and-reverse / manual close)."""
+        symbol = pos["symbol"]
+        ask, bid = self.price(symbol)
+        if pos["type"] == "BUY":
+            order_type, price = mt5.ORDER_TYPE_SELL, bid
+        else:
+            order_type, price = mt5.ORDER_TYPE_BUY, ask
+        req = {
+            "action": mt5.TRADE_ACTION_DEAL, "symbol": symbol,
+            "volume": float(pos["volume"]), "type": order_type,
+            "position": pos["ticket"], "price": price, "deviation": int(slippage),
+            "magic": pos["magic"], "comment": reason[:31],
+            "type_time": mt5.ORDER_TIME_GTC, "type_filling": self._filling(symbol),
+        }
+        res = mt5.order_send(req)
+        ok = res is not None and res.retcode == mt5.TRADE_RETCODE_DONE
+        if ok:
+            log.info("CLOSED %s %s %.2f lots (%s)",
+                     pos["type"], symbol, pos["volume"], reason)
+        else:
+            log.warning("close %s failed: %s", pos["ticket"],
+                        res.comment if res else mt5.last_error())
+        return ok
+
     def _filling(self, symbol):
         """Pick a filling mode the symbol actually supports."""
         info = mt5.symbol_info(symbol)

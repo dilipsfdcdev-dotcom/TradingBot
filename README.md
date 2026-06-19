@@ -177,11 +177,16 @@ restart on failure) or a tool like **NSSM** to run `run_bot.py` as a service.
 
 ## ⚙️ Key config knobs (`config/config.yaml`)
 
+> **Risk values are PERCENTAGES.** Under `risk:` (and a symbol's
+> `risk_per_trade`), write `2` for 2%, `20` for 20%, `0` for off — **not**
+> `0.02`. Position size, the daily loss limit, the profit target and the
+> drawdown kill-switch all read as percent.
+
 | Setting | Meaning |
 |--------|---------|
-| `risk.risk_per_trade` | Fraction of balance risked per trade (0.02 = 2%). |
-| `risk.daily_loss_limit` | Stop trading for the day at this loss. |
-| `risk.max_drawdown_stop` | Kill-switch: halt bot at this drawdown from peak. |
+| `risk.risk_per_trade` | Percent of balance risked per trade (`2` = 2%). |
+| `risk.daily_loss_limit` | Stop trading for the day at this % loss (`20` = 20%). |
+| `risk.max_drawdown_stop` | Kill-switch: halt bot at this % drawdown from peak (`10` = 10%). |
 | `exits.sl_atr_mult` / `tp_atr_mult` | Stop / target distance in ATRs. |
 | `exits.breakeven_at_r` / `trail_start_r` | When profit protection kicks in. |
 | `strategy.min_confluence_score` | How many of 6 signals must agree (raise = fewer, higher-quality trades). |

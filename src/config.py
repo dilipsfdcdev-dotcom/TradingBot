@@ -50,6 +50,20 @@ class Config:
         return str(ROOT / self.raw["storage"]["log_dir"])
 
 
+def _pct_to_fraction(raw: dict) -> None:
+    """Config authors percentages (2 = 2%, 20 = 20%); the engine works in
+    fractions. Convert the percentage fields once, here, so nothing else has
+    to change. Idempotent-safe only on a freshly loaded dict."""
+    risk = raw.get("risk", {})
+    for key in ("risk_per_trade", "daily_loss_limit",
+                "daily_profit_target", "max_drawdown_stop"):
+        if key in risk and risk[key] is not None:
+            risk[key] = risk[key] / 100.0
+    for sym in raw.get("symbols", []):
+        if sym.get("risk_per_trade") is not None:
+            sym["risk_per_trade"] = sym["risk_per_trade"] / 100.0
+
+
 def load_config(path: str | None = None) -> Config:
     """Load config.yaml + .env into a single Config object."""
     load_dotenv(ROOT / ".env")
@@ -57,6 +71,8 @@ def load_config(path: str | None = None) -> Config:
     cfg_path = Path(path) if path else ROOT / "config" / "config.yaml"
     with open(cfg_path, "r", encoding="utf-8") as fh:
         raw = yaml.safe_load(fh)
+
+    _pct_to_fraction(raw)
 
     def _int(name: str, default: int) -> int:
         try:

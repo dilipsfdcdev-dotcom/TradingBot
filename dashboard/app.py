@@ -69,6 +69,49 @@ c3.metric("Open P/L", f"{acc.get('profit', 0):,.2f}")
 c4.metric("Used Margin", f"{acc.get('margin', 0):,.2f}")
 c5.metric("Free Margin", f"{acc.get('free_margin', 0):,.2f}")
 
+# ── live signal status (always visible) ─────────────────────────────────────
+st.divider()
+need = cfg["strategy"]["min_confluence_score"]
+st.markdown(f"### 🔎 Live signal status  ·  *need ≥ {need}/6 + 2 timeframes to agree*")
+
+_DIR_EMOJI = {"BUY": "🟢 BUY", "SELL": "🔴 SELL", "NONE": "⚪ none",
+              "NODATA": "⚫ no data"}
+_STATE_EMOJI = {
+    "TRADE": "✅ TRADE", "holding": "📌 holding", "no_signal": "🔍 scanning",
+    "no_agreement": "🔍 scanning", "spread_wide": "⚠️ spread wide",
+    "news_blocked": "📰 news block", "market_closed": "🌙 market closed",
+    "no_data": "❌ no data", "paused": "⏸️ paused", "error": "❗ error",
+}
+
+sym_names = [s["name"] for s in cfg["symbols"] if s["enabled"]]
+for sym in sym_names:
+    state = status.get(f"state_{sym}", {})
+    sigs = status.get(f"signals_{sym}", {})
+    label = _STATE_EMOJI.get(state.get("state", ""), state.get("state", "?"))
+    detail = state.get("detail", "")
+
+    with st.container(border=True):
+        head, *tf_cols = st.columns([1.4] + [1] * max(len(sigs), 1))
+        head.markdown(f"**{sym}**")
+        head.caption(f"{label}")
+        if detail:
+            head.caption(detail)
+
+        if not sigs:
+            tf_cols[0].caption("waiting for first scan...")
+        for col, (tf, info) in zip(tf_cols, sigs.items()):
+            score = info.get("score", 0)
+            direction = info.get("direction", "NONE")
+            # delta shows distance from the entry threshold
+            col.metric(f"{tf}  ·  {_DIR_EMOJI.get(direction, direction)}",
+                       f"{score}/6", delta=f"{score - need:+d} vs entry",
+                       delta_color="normal" if score >= need else "off")
+            snap = info.get("snapshot", {})
+            if snap:
+                col.caption(
+                    f"RSI {snap.get('rsi','-')} · ADX {snap.get('adx','-')} · "
+                    f"HTF {snap.get('htf_bias','-')}")
+
 tabs = st.tabs(["📈 Overview", "💼 Positions", "🎯 Signals", "📰 News", "🧪 Backtest"])
 
 # ── Overview ──────────────────────────────────────────────────────────────

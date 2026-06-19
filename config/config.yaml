@@ -27,9 +27,9 @@ symbols:
 # ── Timeframes ───────────────────────────────────────────────────────────
 # The bot trades the `entry` timeframes and uses `trend` as a higher-TF filter.
 timeframes:
-  entry: ["M1"]
+  entry: ["M3"]
   # entry: ["M1", "M3", "M5"]   # scalping timeframes you asked for
-  trend: "M5"                 # higher TF that defines directional bias
+  trend: "M3"                 # higher TF that defines directional bias
                               # (M5 is the better-matched filter for M1 entries)
 
 # ── Risk management ──────────────────────────────────────────────────────
@@ -67,7 +67,7 @@ exits:
   # profit/loss for the trade's lot size — so every win and every loss is a
   # known, fixed amount. With TP > SL you win more than you lose per trade.
   profit_target_money: 15000  # take profit at +15,000
-  stop_loss_money: 10000      # stop loss at -10,000 (capped, fixed)
+  stop_loss_money: 30000      # stop loss at -10,000 (capped, fixed)
   # --- stop-and-reverse ---
   close_on_opposite_signal: true   # if holding a BUY and a valid SELL signal
                                    # fires (or vice-versa), close the position

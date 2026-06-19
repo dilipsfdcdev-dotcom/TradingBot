@@ -92,6 +92,10 @@ strategy:
   bb_std: 2.0
   min_confluence_score: 4     # need >= this many aligned signals to enter (max 6)
   min_atr_pct: 0.0002         # skip dead markets (ATR as fraction of price)
+  # single_signal: trade off ONE signal only (bypasses the 6-signal confluence,
+  # the ADX/ATR gates and all vetoes). Options: ema_cross, price_vs_emaslow,
+  # macd, macd_momentum, rsi_mid, htf_trend. Empty "" = full confluence system.
+  single_signal: "macd_momentum"
 
 # ── News filter ──────────────────────────────────────────────────────────
 news:

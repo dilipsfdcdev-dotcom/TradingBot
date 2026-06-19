@@ -102,14 +102,6 @@ def evaluate(f: dict, htf: int, params: dict) -> Signal:
         "htf_bias": htf, "price": round(price, 5),
     }
 
-    # --- hard gates ---
-    if adx_v < p["adx_min"]:
-        sig.reasons.append(f"ADX {adx_v:.1f} < {p['adx_min']} (chop)")
-        return sig
-    if price > 0 and (atr_val / price) < p["min_atr_pct"]:
-        sig.reasons.append("ATR too low (dead market)")
-        return sig
-
     # --- confluence votes (+1 buy, -1 sell) ---
     votes = [
         ("ema_cross", 1 if f["ema_fast"] > f["ema_slow"] else -1),
@@ -119,8 +111,31 @@ def evaluate(f: dict, htf: int, params: dict) -> Signal:
         ("rsi_mid", 1 if rsi_v >= 50 else -1),
         ("htf_trend", htf if htf != 0 else (1 if price > f["ema_slow"] else -1)),
     ]
-    net = sum(v for _, v in votes)
+    vote_map = dict(votes)
     vote_reasons = [f"{name}:{'+' if v > 0 else ''}{v}" for name, v in votes]
+
+    # --- single-signal mode: trade purely off ONE signal, no gates/vetoes ---
+    single = p.get("single_signal")
+    if single:
+        v = vote_map.get(single)
+        if v is None:
+            sig.reasons = [f"unknown single_signal '{single}'"]
+            return sig
+        sig.score = sig.max_score
+        sig.direction = "BUY" if v > 0 else "SELL"
+        sig.reasons = [f"{single}:{'+' if v > 0 else ''}{v}",
+                       f"(single-signal mode: {single})"]
+        return sig
+
+    # --- hard gates ---
+    if adx_v < p["adx_min"]:
+        sig.reasons.append(f"ADX {adx_v:.1f} < {p['adx_min']} (chop)")
+        return sig
+    if price > 0 and (atr_val / price) < p["min_atr_pct"]:
+        sig.reasons.append("ATR too low (dead market)")
+        return sig
+
+    net = sum(v for _, v in votes)
     direction = "BUY" if net > 0 else "SELL" if net < 0 else "NONE"
     if direction == "NONE":
         sig.reasons = vote_reasons + ["no net bias (3 buy / 3 sell tie)"]

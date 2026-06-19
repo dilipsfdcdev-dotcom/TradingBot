@@ -17,7 +17,7 @@ symbols:
     enabled: true
     session: "metals"
     max_spread: 300          # points; gold spread is usually 15-35
-    risk_per_trade: 0.1    # overrides global risk if set (2%)
+    risk_per_trade: 2    # overrides global risk if set (2%)
   # - name: "BTCUSD"
   #   enabled: true
   #   session: "24/7"

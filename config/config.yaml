@@ -40,8 +40,8 @@ risk:
                               # "risk"  = size from risk_per_trade % of balance
   fixed_lot: 2.0              # lots per trade when sizing_mode = "fixed"
   risk_per_trade: 2           # % of balance risked per trade (sizing_mode = "risk")
-  max_open_trades: 5          # total simultaneous positions across all symbols
-  max_trades_per_symbol: 5    # max stacked positions on the same symbol
+  max_open_trades: 20          # total simultaneous positions across all symbols
+  max_trades_per_symbol: 20    # max stacked positions on the same symbol
   daily_loss_limit: 0         # 0 = OFF (no daily loss halt — trades forever)
   daily_profit_target: 0      # 0 = OFF (no daily profit halt)
   max_drawdown_stop: 0        # 0 = OFF (kill switch DISABLED — no safety halt)
@@ -89,7 +89,7 @@ strategy:
   macd_signal: 9
   bb_period: 20
   bb_std: 2.0
-  min_confluence_score: 3     # need >= this many aligned signals to enter (max 6)
+  min_confluence_score: 4     # need >= this many aligned signals to enter (max 6)
   min_atr_pct: 0.0002         # skip dead markets (ATR as fraction of price)
 
 # ── News filter ──────────────────────────────────────────────────────────

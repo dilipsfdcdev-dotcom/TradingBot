@@ -294,24 +294,35 @@ class TradingEngine:
         risk_pct = sym_cfg.get("risk_per_trade", self.cfg["risk"]["risk_per_trade"])
         lot = position_size(acc["balance"], risk_pct, entry, sl, spec, self.cfg["risk"])
 
-        # If a money profit target is set, place the broker TP at the PRICE that
-        # yields that profit for this lot size (instead of the ATR-based TP), so
-        # MT5 closes the trade the instant +target is reached.
-        money_per_price = (lot * spec.tick_value / spec.tick_size
-                           if spec.tick_value > 0 and spec.tick_size > 0 else 0)
+        # Money-based TP/SL: place them at the exact prices that yield the
+        # configured profit/loss for this lot size, using the broker's own
+        # profit calculator (handles contract size + currency conversion).
+        money_per_price = self.broker.money_per_price_unit(symbol, lot, sig.direction)
         target = self.cfg["exits"].get("profit_target_money", 0)
-        if target and target > 0 and money_per_price > 0:
-            tp_dist = target / money_per_price
-            tp = entry + tp_dist if sig.direction == "BUY" else entry - tp_dist
-
-        # Likewise a fixed money STOP: cap every loss at a known amount.
         sl_money = self.cfg["exits"].get("stop_loss_money", 0)
-        if sl_money and sl_money > 0 and money_per_price > 0:
-            sl_dist = sl_money / money_per_price
-            sl = entry - sl_dist if sig.direction == "BUY" else entry + sl_dist
+        if money_per_price > 0:
+            if target and target > 0:
+                tp_dist = target / money_per_price
+                tp = entry + tp_dist if sig.direction == "BUY" else entry - tp_dist
+            if sl_money and sl_money > 0:
+                sl_dist = sl_money / money_per_price
+                sl = entry - sl_dist if sig.direction == "BUY" else entry + sl_dist
+        elif target or sl_money:
+            log.warning("%s: couldn't compute money/price — using ATR SL/TP", symbol)
+
+        # respect the broker's minimum stop distance (else 'invalid stops')
+        min_dist = self.broker.stops_level_price(symbol)
+        if min_dist > 0:
+            if sig.direction == "BUY":
+                sl, tp = min(sl, entry - min_dist), max(tp, entry + min_dist)
+            else:
+                sl, tp = max(sl, entry + min_dist), min(tp, entry - min_dist)
 
         sl = round(sl, spec.digits)
         tp = round(tp, spec.digits)
+        log.info("%s %s sizing lot=%.2f entry=%.3f SL=%.3f TP=%.3f "
+                 "(money/price=%.1f, min_stop=%.3f)",
+                 symbol, sig.direction, lot, entry, sl, tp, money_per_price, min_dist)
 
         ticket = self.broker.open_trade(
             symbol, sig.direction, lot, sl, tp, self.magic,

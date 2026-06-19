@@ -152,6 +152,33 @@ class Broker:
         t = mt5.symbol_info_tick(symbol)
         return (t.ask, t.bid) if t else (0.0, 0.0)
 
+    def money_per_price_unit(self, symbol: str, lot: float, direction: str) -> float:
+        """Account-currency profit from a 1.0 price move for `lot` lots.
+
+        Uses MT5's own profit calculator (handles contract size + currency
+        conversion exactly). Falls back to tick maths if it's unavailable.
+        """
+        t = mt5.symbol_info_tick(symbol)
+        if not t:
+            return 0.0
+        price = t.ask if direction == "BUY" else t.bid
+        otype = mt5.ORDER_TYPE_BUY if direction == "BUY" else mt5.ORDER_TYPE_SELL
+        close = price + 1.0 if direction == "BUY" else price - 1.0
+        p = mt5.order_calc_profit(otype, symbol, lot, price, close)
+        if p:
+            return abs(p)
+        s = mt5.symbol_info(symbol)
+        if s and s.trade_tick_size > 0 and s.trade_tick_value:
+            return lot * s.trade_tick_value / s.trade_tick_size
+        return 0.0
+
+    def stops_level_price(self, symbol: str) -> float:
+        """Broker's minimum SL/TP distance from price, in price units."""
+        s = mt5.symbol_info(symbol)
+        if not s:
+            return 0.0
+        return (s.trade_stops_level or 0) * s.point
+
     # ── positions ─────────────────────────────────────────────────────────
     def positions(self, magic: int | None = None) -> list[dict]:
         pos = mt5.positions_get()

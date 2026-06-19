@@ -288,6 +288,14 @@ class TradingEngine:
         risk_pct = sym_cfg.get("risk_per_trade", self.cfg["risk"]["risk_per_trade"])
         lot = position_size(acc["balance"], risk_pct, entry, sl, spec, self.cfg["risk"])
 
+        # If a money profit target is set, place the broker TP at the PRICE that
+        # yields that profit for this lot size (instead of the ATR-based TP), so
+        # MT5 closes the trade the instant +target is reached. SL stays ATR-based.
+        target = self.cfg["exits"].get("profit_target_money", 0)
+        if target and target > 0 and lot > 0 and spec.tick_value > 0 and spec.tick_size > 0:
+            tp_dist = target * spec.tick_size / (lot * spec.tick_value)
+            tp = entry + tp_dist if sig.direction == "BUY" else entry - tp_dist
+
         sl = round(sl, spec.digits)
         tp = round(tp, spec.digits)
 

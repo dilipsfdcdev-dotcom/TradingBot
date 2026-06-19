@@ -72,7 +72,35 @@ _STATE = {
     "no_agreement": "🔍 Scanning (mixed)", "spread_wide": "⚠️ Spread too wide",
     "news_blocked": "📰 Paused for news", "market_closed": "🌙 Market closed",
     "no_data": "❌ No data", "paused": "⏸️ Paused", "error": "❗ Error",
+    "reversed": "🔄 Reversed",
 }
+
+# the 6 confluence signals -> human labels (keys match strategy.evaluate votes)
+_SIGNAL_LABELS = {
+    "ema_cross": "EMA 9/21 cross",
+    "price_vs_emaslow": "Price vs EMA 21",
+    "macd": "MACD histogram",
+    "macd_momentum": "MACD momentum",
+    "rsi_mid": "RSI vs 50",
+    "htf_trend": "M15 trend (HTF)",
+}
+
+
+def parse_votes(reasons):
+    """Split a signal's reasons into (votes, notes).
+
+    votes = [(label, +1/-1)] for the 6 confluence checks; notes = gate/veto
+    messages (ADX too low, RSI overbought veto, etc.).
+    """
+    votes, notes = [], []
+    for r in reasons or []:
+        name, sep, val = r.rpartition(":")
+        if sep and val.strip() in ("+1", "-1"):
+            label = _SIGNAL_LABELS.get(name, name)
+            votes.append((label, 1 if val.strip() == "+1" else -1))
+        else:
+            notes.append(r)
+    return votes, notes
 
 # ═══════════════════ HEADER ═══════════════════
 c1, c2 = st.columns([3, 1])
@@ -140,6 +168,20 @@ for sym in [s["name"] for s in cfg["symbols"] if s["enabled"]]:
             if snap:
                 col.caption(f"RSI {snap.get('rsi', '–')} · ADX {snap.get('adx', '–')} "
                             f"· trend {snap.get('htf_bias', '–')}")
+
+            # the 6 confluence signals with each one's BUY/SELL vote
+            votes, notes = parse_votes(info.get("reasons", []))
+            if votes:
+                n_buy = sum(1 for _, v in votes if v > 0)
+                n_sell = len(votes) - n_buy
+                col.caption(f"🟢 {n_buy} buy  ·  🔴 {n_sell} sell")
+                for lbl, v in votes:
+                    if v > 0:
+                        col.markdown(f":green[🟢 {lbl} → BUY]")
+                    else:
+                        col.markdown(f":red[🔴 {lbl} → SELL]")
+            for note in notes:
+                col.caption(f"⚠️ {note}")
 
 st.divider()
 

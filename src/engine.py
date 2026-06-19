@@ -136,28 +136,34 @@ class TradingEngine:
         self._heartbeat(acc, positions, statuses)
 
     def _take_profit_targets(self, positions) -> int:
-        """Close any position whose floating profit reached the money target.
+        """Backstop for the fixed money TP/SL (the order's TP/SL is primary).
 
-        Banks the cash so a reversal can't give it back; the normal entry logic
-        re-opens the same cycle if the signal still qualifies (bank-and-re-enter).
-        Returns the number of positions closed.
+        Closes a position whose floating profit reached +profit_target_money or
+        fell to -stop_loss_money, in case the broker order didn't fill (gaps).
+        After a profit close the entry logic re-opens next cycle if the signal
+        still qualifies (bank-and-re-enter). Returns the number closed.
         """
-        target = self.cfg["exits"].get("profit_target_money", 0)
-        if not target or target <= 0:
+        tp_money = self.cfg["exits"].get("profit_target_money", 0)
+        sl_money = self.cfg["exits"].get("stop_loss_money", 0)
+        if (not tp_money or tp_money <= 0) and (not sl_money or sl_money <= 0):
             return 0
         closed = 0
         for p in positions:
-            if p["profit"] >= target:
-                if self.broker.close_position(
-                        p, self.cfg["engine"]["slippage_points"],
-                        f"profit +{p['profit']:.0f}"):
-                    self.store.record_event(
-                        "CLOSE", p["symbol"], p["type"], p["volume"],
-                        p["price_current"], profit=p["profit"], ticket=p["ticket"],
-                        detail=f"money profit target {target}")
-                    log.info("BANKED %.0f profit on %s %s (target %.0f)",
-                             p["profit"], p["symbol"], p["type"], target)
-                    closed += 1
+            hit_tp = tp_money and tp_money > 0 and p["profit"] >= tp_money
+            hit_sl = sl_money and sl_money > 0 and p["profit"] <= -sl_money
+            if not (hit_tp or hit_sl):
+                continue
+            reason = f"profit +{p['profit']:.0f}" if hit_tp else f"stop {p['profit']:.0f}"
+            if self.broker.close_position(
+                    p, self.cfg["engine"]["slippage_points"], reason):
+                self.store.record_event(
+                    "CLOSE", p["symbol"], p["type"], p["volume"],
+                    p["price_current"], profit=p["profit"], ticket=p["ticket"],
+                    detail=f"money {'TP' if hit_tp else 'SL'} hit")
+                log.info("%s %.0f on %s %s",
+                         "BANKED" if hit_tp else "STOPPED", p["profit"],
+                         p["symbol"], p["type"])
+                closed += 1
         return closed
 
     def _heartbeat(self, acc, positions, statuses: dict[str, tuple[str, str]]) -> None:
@@ -290,11 +296,19 @@ class TradingEngine:
 
         # If a money profit target is set, place the broker TP at the PRICE that
         # yields that profit for this lot size (instead of the ATR-based TP), so
-        # MT5 closes the trade the instant +target is reached. SL stays ATR-based.
+        # MT5 closes the trade the instant +target is reached.
+        money_per_price = (lot * spec.tick_value / spec.tick_size
+                           if spec.tick_value > 0 and spec.tick_size > 0 else 0)
         target = self.cfg["exits"].get("profit_target_money", 0)
-        if target and target > 0 and lot > 0 and spec.tick_value > 0 and spec.tick_size > 0:
-            tp_dist = target * spec.tick_size / (lot * spec.tick_value)
+        if target and target > 0 and money_per_price > 0:
+            tp_dist = target / money_per_price
             tp = entry + tp_dist if sig.direction == "BUY" else entry - tp_dist
+
+        # Likewise a fixed money STOP: cap every loss at a known amount.
+        sl_money = self.cfg["exits"].get("stop_loss_money", 0)
+        if sl_money and sl_money > 0 and money_per_price > 0:
+            sl_dist = sl_money / money_per_price
+            sl = entry - sl_dist if sig.direction == "BUY" else entry + sl_dist
 
         sl = round(sl, spec.digits)
         tp = round(tp, spec.digits)

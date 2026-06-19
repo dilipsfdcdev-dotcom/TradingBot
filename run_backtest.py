@@ -65,6 +65,14 @@ def main() -> None:
     log = get_logger("backtest")
     bt = Backtester(cfg)
     store = Store(cfg.db_path)
+
+    if args.risk is not None and not (0 < args.risk <= 0.1):
+        print(f"\n❌ --risk must be a fraction in (0, 0.1] (max 10% per trade).\n"
+              f"   Examples: 0.005 = 0.5%, 0.01 = 1%, 0.02 = 2%.\n"
+              f"   You passed {args.risk} (= {args.risk * 100:.0f}% per trade), "
+              f"which would blow up the account. Aborting.")
+        return
+
     risk = args.risk if args.risk else cfg["risk"]["risk_per_trade"]
     all_results = {}
     print(f"\nRisk per trade: {risk*100:.2f}%   "

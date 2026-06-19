@@ -106,6 +106,10 @@ class TradingEngine:
                                for e in self.news.upcoming()])
 
         positions = self.broker.positions(magic=self.magic)
+        # bank floating profit that hits the money target, then refresh so the
+        # symbol can immediately re-enter this same cycle if the signal holds
+        if self._take_profit_targets(positions):
+            positions = self.broker.positions(magic=self.magic)
         self.trade_mgr.manage(positions)
         self.store.snapshot_positions(positions)
 
@@ -130,6 +134,31 @@ class TradingEngine:
                 statuses[sym_cfg["name"]] = ("error", "see log")
 
         self._heartbeat(acc, positions, statuses)
+
+    def _take_profit_targets(self, positions) -> int:
+        """Close any position whose floating profit reached the money target.
+
+        Banks the cash so a reversal can't give it back; the normal entry logic
+        re-opens the same cycle if the signal still qualifies (bank-and-re-enter).
+        Returns the number of positions closed.
+        """
+        target = self.cfg["exits"].get("profit_target_money", 0)
+        if not target or target <= 0:
+            return 0
+        closed = 0
+        for p in positions:
+            if p["profit"] >= target:
+                if self.broker.close_position(
+                        p, self.cfg["engine"]["slippage_points"],
+                        f"profit +{p['profit']:.0f}"):
+                    self.store.record_event(
+                        "CLOSE", p["symbol"], p["type"], p["volume"],
+                        p["price_current"], profit=p["profit"], ticket=p["ticket"],
+                        detail=f"money profit target {target}")
+                    log.info("BANKED %.0f profit on %s %s (target %.0f)",
+                             p["profit"], p["symbol"], p["type"], target)
+                    closed += 1
+        return closed
 
     def _heartbeat(self, acc, positions, statuses: dict[str, tuple[str, str]]) -> None:
         """Persist each symbol's state and log a compact summary periodically."""

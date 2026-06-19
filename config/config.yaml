@@ -16,13 +16,13 @@ symbols:
   - name: "XAUUSD"
     enabled: true
     session: "metals"
-    max_spread: 50          # points; gold spread is usually 15-35
+    max_spread: 300          # points; gold spread is usually 15-35
     risk_per_trade: 0.02    # overrides global risk if set (2%)
-  - name: "BTCUSD"
-    enabled: true
-    session: "24/7"
-    max_spread: 5000        # BTC point spreads are large; tune to your broker
-    risk_per_trade: 0.02
+  # - name: "BTCUSD"
+  #   enabled: true
+  #   session: "24/7"
+  #   max_spread: 5000        # BTC point spreads are large; tune to your broker
+  #   risk_per_trade: 0.02
 
 # ── Timeframes ───────────────────────────────────────────────────────────
 # The bot trades the `entry` timeframes and uses `trend` as a higher-TF filter.
@@ -32,12 +32,12 @@ timeframes:
 
 # ── Risk management ──────────────────────────────────────────────────────
 risk:
-  risk_per_trade: 0.02        # 2% of balance risked per trade (global default)
-  max_open_trades: 4          # total simultaneous positions across all symbols
-  max_trades_per_symbol: 1    # don't stack positions on the same symbol
-  daily_loss_limit: 0.06      # stop trading for the day after -6% equity
-  daily_profit_target: 0.10   # optional: stop for the day after +10% (0 = off)
-  max_drawdown_stop: 0.20     # KILL SWITCH: halt bot entirely at -20% from peak
+  risk_per_trade: 0.10        # 2% of balance risked per trade (global default)
+  max_open_trades: 10          # total simultaneous positions across all symbols
+  max_trades_per_symbol: 5    # don't stack positions on the same symbol
+  daily_loss_limit: 20      # stop trading for the day after -6% equity
+  daily_profit_target: 500   # optional: stop for the day after +10% (0 = off)
+  max_drawdown_stop: 10     # KILL SWITCH: halt bot entirely at -20% from peak
   min_lot: 0.01
   lot_step: 0.01
   max_lot: 50.0               # hard cap so a tiny SL can't size a monster lot
@@ -70,7 +70,7 @@ strategy:
   macd_signal: 9
   bb_period: 20
   bb_std: 2.0
-  min_confluence_score: 4     # need >= this many aligned signals to enter (max 6)
+  min_confluence_score: 3     # need >= this many aligned signals to enter (max 6)
   min_atr_pct: 0.0002         # skip dead markets (ATR as fraction of price)
 
 # ── News filter ──────────────────────────────────────────────────────────
